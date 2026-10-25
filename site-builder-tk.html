@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Site Builder (Tk style)</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;background:#c0c0c0;color:#000;font:13px "DejaVu Sans","Helvetica","Arial",sans-serif}
+.win{max-width:1100px;margin:12px auto;background:#d9d9d9;border:2px solid;border-color:#fff #555 #555 #fff;box-shadow:2px 2px 0 #333}
+.title{background:#2b4a8b;color:#fff;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;font-weight:bold}
+.title span.b{display:inline-block;width:16px;height:14px;background:#d9d9d9;border:2px solid;border-color:#fff #555 #555 #fff;margin-left:3px}
+.app{display:grid;grid-template-columns:270px 1fr;gap:8px;padding:8px}
+@media(max-width:800px){.app{grid-template-columns:1fr}}
+fieldset{border:2px groove #f0f0f0;margin:0 0 8px;padding:6px 8px 8px}
+legend{padding:0 4px}
+button{font:inherit;background:#d9d9d9;color:#000;padding:4px 8px;cursor:pointer;border:2px solid;border-color:#fff #555 #555 #fff;border-radius:0}
+button:active{border-color:#555 #fff #fff #555;padding:5px 7px 3px 9px}
+button:focus-visible,input:focus-visible{outline:1px dotted #000;outline-offset:-5px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+input[type=text]{width:100%;font:inherit;background:#fff;color:#000;padding:3px 4px;border:2px solid;border-color:#555 #fff #fff #555;border-radius:0}
+input[type=color]{width:100%;height:28px;padding:0;border:2px solid;border-color:#555 #fff #fff #555;background:#fff}
+.hint{margin:0 0 8px}
+#stage{background:#fff;border:2px solid;border-color:#555 #fff #fff #555;height:65vh;min-height:320px;overflow:auto;color:#222}
+#stage .blk{position:relative;padding:24px 20px;outline:1px dotted transparent}
+#stage .blk:hover{outline-color:#2b4a8b}
+.tools{position:absolute;top:2px;right:2px;display:none;gap:2px}
+.blk:hover .tools{display:flex}
+.tools button{padding:1px 6px;font-size:11px}
+[contenteditable]:focus{outline:1px dotted #000;outline-offset:2px}
+.blk img{max-width:100%;display:block;margin:0 auto}
+.blk .btn{display:inline-block;padding:8px 20px;color:#fff;text-decoration:none;border:2px solid;border-color:rgba(255,255,255,.7) rgba(0,0,0,.6) rgba(0,0,0,.6) rgba(255,255,255,.7)}
+.blk .box{width:100%;min-height:80px;padding:6px;font:inherit}
+.linkinfo{font-size:11px;color:#555;margin-top:6px}
+#out{width:100%;height:130px;margin-top:8px;font:11px/1.3 "DejaVu Sans Mono",Consolas,monospace;background:#fff;color:#000;border:2px solid;border-color:#555 #fff #fff #555;padding:4px;border-radius:0}
+.status{border-top:2px groove #f0f0f0;padding:3px 8px}
+</style>
+</head>
+<body>
+<div class="win">
+<div class="title">Simple Site Builder<span><span class="b"></span><span class="b"></span><span class="b"></span></span></div>
+<div class="app">
+<div>
+  <p class="hint">Click text in the white canvas to edit it. Hover a block for Up / Down / Link / Delete.</p>
+  <fieldset><legend>Add to page</legend>
+    <div class="row">
+      <button data-add="heading">Heading</button>
+      <button data-add="text">Text</button>
+      <button data-add="image">Image</button>
+      <button data-add="button">Button</button>
+      <button data-add="box">Text box</button>
+      <button data-add="scroll">Scroll box</button>
+    </div>
+  </fieldset>
+  <fieldset><legend>New button link</legend>
+    <input type="text" id="btnLink" value="https://example.com">
+  </fieldset>
+  <fieldset><legend>Colors</legend>
+    Button<input type="color" id="btnColor" value="#2b4a8b">
+    Page background<input type="color" id="pageBg" value="#ffffff">
+  </fieldset>
+  <fieldset><legend>Page title</legend>
+    <input type="text" id="pageTitle" value="My Website">
+  </fieldset>
+  <fieldset><legend>Finish</legend>
+    <button id="gen" style="width:100%;margin-bottom:4px">Generate HTML</button>
+    <div class="row"><button id="copy">Copy</button><button id="dl">Save as...</button></div>
+  </fieldset>
+</div>
+<div>
+  <div id="stage"></div>
+  <textarea id="out" readonly placeholder="Generated HTML appears here."></textarea>
+</div>
+</div>
+<div class="status" id="status">Ready</div>
+</div>
+<script>
+var stage=document.getElementById('stage'), out=document.getElementById('out'), status=document.getElementById('status');
+function say(t){status.textContent=t;}
+function fixUrl(u){u=(u||'').trim();if(!u)return '#';if(/^(https?:|mailto:|tel:|#|\/)/i.test(u))return u;return 'https://'+u;}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function block(html,hasLink){
+  var d=document.createElement('section');d.className='blk';
+  d.innerHTML='<div class="tools"><button data-a="up">Up</button><button data-a="down">Down</button>'+(hasLink?'<button data-a="link">Link</button>':'')+'<button data-a="del">Delete</button></div>'+html;
+  stage.appendChild(d);d.scrollIntoView({block:'nearest'});
+}
+var makers={
+  heading:function(){block('<h1 contenteditable="true" style="margin:0;font-size:2em">Your heading</h1>');},
+  text:function(){block('<p contenteditable="true" style="margin:0;line-height:1.5">Click here and type your text.</p>');},
+  button:function(){
+    var url=fixUrl(document.getElementById('btnLink').value);
+    block('<a class="btn" contenteditable="true" style="background:'+document.getElementById('btnColor').value+'" href="'+esc(url)+'" target="_blank" rel="noopener">Click me</a><div class="linkinfo">Goes to: <span class="u">'+esc(url)+'</span></div>',true);
+  },
+  box:function(){block('<textarea class="box" placeholder="Type here..."></textarea>');},
+  scroll:function(){block('<div style="height:200px;overflow-y:auto;border:1px solid #888;padding:10px"><p contenteditable="true" style="margin:0;line-height:1.5">This box scrolls down. Type as much as you want. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.</p></div>');},
+  image:function(){
+    var url=prompt('Image link (https://...). Leave empty to upload a file:');
+    if(url){block('<img src="'+esc(url)+'" alt="">');return;}
+    var f=document.createElement('input');f.type='file';f.accept='image/*';
+    f.onchange=function(){var r=new FileReader();r.onload=function(){block('<img src="'+r.result+'" alt="">');};if(f.files[0])r.readAsDataURL(f.files[0]);};
+    f.click();
+  }
+};
+document.querySelectorAll('[data-add]').forEach(function(b){b.onclick=function(){makers[b.dataset.add]();say('Added '+b.textContent);};});
+stage.addEventListener('click',function(e){
+  var a=e.target.dataset&&e.target.dataset.a, blk=e.target.closest('.blk');
+  if(!a){if(e.target.closest('a'))e.preventDefault();return;}
+  if(a==='del')blk.remove();
+  if(a==='up'&&blk.previousElementSibling)stage.insertBefore(blk,blk.previousElementSibling);
+  if(a==='down'&&blk.nextElementSibling)stage.insertBefore(blk.nextElementSibling,blk);
+  if(a==='link'){
+    var el=blk.querySelector('a.btn'), u=prompt('Where should this button go?',el.getAttribute('href'));
+    if(u!==null){u=fixUrl(u);el.setAttribute('href',u);blk.querySelector('.u').textContent=u;say('Button link set to '+u);}
+  }
+});
+document.getElementById('pageBg').oninput=function(e){stage.style.background=e.target.value;};
+function build(){
+  var c=stage.cloneNode(true);
+  c.querySelectorAll('.tools,.linkinfo').forEach(function(t){t.remove();});
+  c.querySelectorAll('[contenteditable]').forEach(function(t){t.removeAttribute('contenteditable');});
+  c.querySelectorAll('textarea').forEach(function(t){t.removeAttribute('class');t.setAttribute('style','width:100%;min-height:80px;padding:6px;font:inherit');});
+  c.querySelectorAll('a.btn').forEach(function(t){t.removeAttribute('class');t.style.cssText+=';display:inline-block;padding:10px 22px;color:#fff;text-decoration:none';});
+  c.querySelectorAll('.blk').forEach(function(t){t.removeAttribute('class');t.setAttribute('style','padding:24px 20px');});
+  var title=document.getElementById('pageTitle').value.replace(/</g,'');
+  return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>'+title+'</title>\n<style>\nbody{margin:0;font-family:system-ui,sans-serif;background:'+document.getElementById('pageBg').value+';color:#222}\nimg{max-width:100%;display:block;margin:0 auto}\n</style>\n</head>\n<body>\n'+c.innerHTML+'\n</body>\n</html>';
+}
+document.getElementById('gen').onclick=function(){out.value=build();say('HTML generated');};
+document.getElementById('copy').onclick=function(){out.value=build();out.select();try{navigator.clipboard.writeText(out.value);}catch(e){document.execCommand('copy');}say('Copied to clipboard');};
+document.getElementById('dl').onclick=function(){out.value=build();var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([out.value],{type:'text/html'}));a.download='my-website.html';a.click();say('Saved my-website.html');};
+makers.heading();makers.text();
+</script>
+</body>
+</html>
